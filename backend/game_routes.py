@@ -285,11 +285,11 @@ def submit_emoji_answer(user_id):
         game_data = game_state_response.data[0]
         turn_end_time = game_data["turn_end_time"]
 
-        # Check if the turn timer has expired
+        # Check if the turn timer expired
         if turn_end_time and datetime.utcnow().isoformat() > turn_end_time:
             return jsonify({"error": "Time is up! Your turn has been skipped."}), 400
 
-        # Fetch the correct answer from the emoji_puzzles table
+        # Fetch the correct answer
         response = supabase_client.table("emoji_puzzles").select("correct_answer", "genre").eq("id", puzzle_id).execute()
 
         if not response.data:
@@ -308,9 +308,34 @@ def submit_emoji_answer(user_id):
         else:
             is_correct = False
 
-        # Update game state with new score
+        # Check if this was the last round
+        current_round = game_data["current_round"]
+        total_rounds = game_data["total_rounds"]
+
+        if current_round >= total_rounds:
+            # Game Over - Determine Winner
+            winner_id = max(current_scores[genre], key=current_scores[genre].get)
+            winner_score = current_scores[genre][winner_id]
+
+            # Update game state to inactive
+            supabase_client.table("game_state").update({
+                "is_active": False,
+                "updated_at": datetime.utcnow().isoformat()
+            }).eq("room_id", room_id).execute()
+
+            return jsonify({
+                "message": "Game Over!",
+                "winner_id": winner_id,
+                "winner_score": winner_score
+            })
+
+        # Otherwise, increase round count
+        new_round = current_round + 1
+
+        # Update game state with new score & round count
         supabase_client.table("game_state").update({
             "game_data": { "scores": current_scores },
+            "current_round": new_round,
             "updated_at": datetime.utcnow().isoformat()
         }).eq("room_id", room_id).execute()
 
