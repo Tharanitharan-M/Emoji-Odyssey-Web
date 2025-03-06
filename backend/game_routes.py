@@ -2,9 +2,9 @@ from flask import Blueprint, request, jsonify
 from config import supabase_client
 from middleware import token_required
 import uuid
-from datetime import datetime
 import random
 import string
+from datetime import datetime, timedelta
 
 game_blueprint = Blueprint("game", __name__)
 
@@ -219,6 +219,8 @@ def get_turn_info(user_id, room_id):
 
 import random
 
+from datetime import datetime, timedelta
+
 @game_blueprint.route("/get_emoji_puzzle/<room_id>/<genre>", methods=["GET"])
 @token_required
 def get_emoji_puzzle(user_id, room_id, genre):
@@ -237,13 +239,23 @@ def get_emoji_puzzle(user_id, room_id, genre):
 
         random_puzzle = random.choice(response.data)
 
+        # Set a 30-second timer for the turn
+        turn_end_time = datetime.utcnow() + timedelta(seconds=30)
+
+        # Update game_state with turn_end_time
+        supabase_client.table("game_state").update({
+            "turn_end_time": turn_end_time.isoformat()
+        }).eq("room_id", room_id).execute()
+
         return jsonify({
             "puzzle_id": random_puzzle["id"],
-            "emoji_clue": random_puzzle["emoji_clue"]
+            "emoji_clue": random_puzzle["emoji_clue"],
+            "turn_end_time": turn_end_time.isoformat()
         })
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 
 @game_blueprint.route("/submit_emoji_answer", methods=["POST"])
@@ -264,7 +276,20 @@ def submit_emoji_answer(user_id):
         except ValueError:
             return jsonify({"error": "Invalid room_id format"}), 400
 
-        # Fetch the correct answer from the database
+        # Fetch game state
+        game_state_response = supabase_client.table("game_state").select("*").eq("room_id", room_id).execute()
+
+        if not game_state_response.data:
+            return jsonify({"error": "Game state not found"}), 404
+
+        game_data = game_state_response.data[0]
+        turn_end_time = game_data["turn_end_time"]
+
+        # Check if the turn timer has expired
+        if turn_end_time and datetime.utcnow().isoformat() > turn_end_time:
+            return jsonify({"error": "Time is up! Your turn has been skipped."}), 400
+
+        # Fetch the correct answer from the emoji_puzzles table
         response = supabase_client.table("emoji_puzzles").select("correct_answer", "genre").eq("id", puzzle_id).execute()
 
         if not response.data:
@@ -273,27 +298,18 @@ def submit_emoji_answer(user_id):
         correct_answer = response.data[0]["correct_answer"]
         genre = response.data[0]["genre"]
 
-        # Fetch game state
-        game_state = supabase_client.table("game_state").select("*").eq("room_id", room_id).execute()
-
-        if not game_state.data:
-            return jsonify({"error": "Game state not found"}), 404
-
-        game_data = game_state.data[0]
+        # Get current scores
         current_scores = game_data["game_data"].get("scores", {})
 
         # Check if answer is correct
         if player_answer.strip().lower() == correct_answer.strip().lower():
-            # Increase score specific to this genre
-            if genre not in current_scores:
-                current_scores[genre] = {}
             current_scores[genre][user_id] = current_scores[genre].get(user_id, 0) + 10
             is_correct = True
         else:
             is_correct = False
 
-        # Update game state with new genre-specific score
-        response = supabase_client.table("game_state").update({
+        # Update game state with new score
+        supabase_client.table("game_state").update({
             "game_data": { "scores": current_scores },
             "updated_at": datetime.utcnow().isoformat()
         }).eq("room_id", room_id).execute()
@@ -306,6 +322,8 @@ def submit_emoji_answer(user_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
 
 @game_blueprint.route("/get_genres", methods=["GET"])
 def get_genres():

@@ -146,3 +146,17 @@ def reset_leaderboard(admin_user_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+@leaderboard_blueprint.route("<genre>", methods=["GET"])
+def fetch_leaderboard(genre):
+    try:
+        # Fetch top 10 players for the given genre, ordered by score
+        response = supabase_client.table("leaderboard").select("user_id, total_score, genre").eq("genre", genre).order("total_score", desc=True).limit(10).execute()
+
+        if not response.data:
+            return jsonify({"message": "No scores found for this genre"}), 404
+
+        return jsonify({"leaderboard": response.data})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
