@@ -216,3 +216,110 @@ def get_turn_info(user_id, room_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+import random
+
+@game_blueprint.route("/get_emoji_puzzle/<room_id>/<genre>", methods=["GET"])
+@token_required
+def get_emoji_puzzle(user_id, room_id, genre):
+    try:
+        # Validate room_id
+        try:
+            room_id = str(uuid.UUID(room_id))
+        except ValueError:
+            return jsonify({"error": "Invalid room_id format"}), 400
+
+        # Fetch a random emoji puzzle from the selected genre
+        response = supabase_client.table("emoji_puzzles").select("*").eq("genre", genre).execute()
+
+        if not response.data:
+            return jsonify({"error": "No emoji puzzles found for this genre"}), 404
+
+        random_puzzle = random.choice(response.data)
+
+        return jsonify({
+            "puzzle_id": random_puzzle["id"],
+            "emoji_clue": random_puzzle["emoji_clue"]
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@game_blueprint.route("/submit_emoji_answer", methods=["POST"])
+@token_required
+def submit_emoji_answer(user_id):
+    try:
+        data = request.json
+        room_id = data.get("room_id")
+        puzzle_id = data.get("puzzle_id")
+        player_answer = data.get("answer")
+
+        if not room_id or not puzzle_id or not player_answer:
+            return jsonify({"error": "room_id, puzzle_id, and answer are required"}), 400
+
+        # Validate room_id
+        try:
+            room_id = str(uuid.UUID(room_id))
+        except ValueError:
+            return jsonify({"error": "Invalid room_id format"}), 400
+
+        # Fetch the correct answer from the database
+        response = supabase_client.table("emoji_puzzles").select("correct_answer", "genre").eq("id", puzzle_id).execute()
+
+        if not response.data:
+            return jsonify({"error": "Invalid puzzle ID"}), 404
+
+        correct_answer = response.data[0]["correct_answer"]
+        genre = response.data[0]["genre"]
+
+        # Fetch game state
+        game_state = supabase_client.table("game_state").select("*").eq("room_id", room_id).execute()
+
+        if not game_state.data:
+            return jsonify({"error": "Game state not found"}), 404
+
+        game_data = game_state.data[0]
+        current_scores = game_data["game_data"].get("scores", {})
+
+        # Check if answer is correct
+        if player_answer.strip().lower() == correct_answer.strip().lower():
+            # Increase score specific to this genre
+            if genre not in current_scores:
+                current_scores[genre] = {}
+            current_scores[genre][user_id] = current_scores[genre].get(user_id, 0) + 10
+            is_correct = True
+        else:
+            is_correct = False
+
+        # Update game state with new genre-specific score
+        response = supabase_client.table("game_state").update({
+            "game_data": { "scores": current_scores },
+            "updated_at": datetime.utcnow().isoformat()
+        }).eq("room_id", room_id).execute()
+
+        return jsonify({
+            "correct": is_correct,
+            "message": "Answer submitted successfully!",
+            "new_score": current_scores[genre][user_id]
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@game_blueprint.route("/get_genres", methods=["GET"])
+def get_genres():
+    try:
+        # Fetch unique genres from the emoji_puzzles table
+        response = supabase_client.table("emoji_puzzles").select("genre").execute()
+
+        if not response.data:
+            return jsonify({"error": "No genres found"}), 404
+
+        # Extract unique genres
+        genres = list(set([entry["genre"] for entry in response.data]))
+
+        return jsonify({"genres": genres})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
