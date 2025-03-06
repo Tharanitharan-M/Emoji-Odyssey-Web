@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from config import supabase_client
-from middleware import token_required
+from middleware import token_required, admin_required
 from time import time  # For Unix timestamp
 
 leaderboard_blueprint = Blueprint("leaderboard", __name__)
@@ -133,3 +133,16 @@ def update_score(user_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@leaderboard_blueprint.route("/admin/reset_leaderboard", methods=["POST"])
+@admin_required
+def reset_leaderboard(admin_user_id):
+    try:
+        # Delete all leaderboard records safely
+        supabase_client.table("leaderboard").delete().gt("total_score", -1).execute()
+
+        return jsonify({"message": "Leaderboard has been reset!"})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+

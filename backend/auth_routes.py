@@ -14,8 +14,11 @@ def signup():
         if not email or not password:
             return jsonify({"error": "Email and password are required"}), 400
 
-        # Sign up user in Supabase
-        response = supabase_client.auth.sign_up({"email": email, "password": password})
+        # 🔹 Sign up the user in Supabase
+        response = supabase_client.auth.sign_up({
+            "email": email,
+            "password": password
+        })
 
         if response.user is None:
             return jsonify({"error": "Signup failed. User may already exist."}), 400
@@ -43,8 +46,24 @@ def login():
         if response.user is None or response.session is None:
             return jsonify({"error": "Invalid email or password"}), 401
 
-        # Return JWT Token
-        return jsonify({"token": response.session.access_token})
+        # 🔹 Return Only JWT Token
+        return jsonify({
+            "token": response.session.access_token
+        })
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# 🔹 Logout API (Invalidates the Token)
+@auth_blueprint.route("/logout", methods=["POST"])
+def logout():
+    try:
+        # 🔹 Supabase sign out request (no access token required)
+        supabase_client.auth.sign_out()
+
+        return jsonify({"message": "User logged out successfully!"})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+

@@ -56,3 +56,35 @@ def token_required(f):
         return f(user_id, *args, **kwargs)
 
     return decorated
+
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.headers.get("Authorization")
+
+        if not token:
+            return jsonify({"error": "Token is missing!"}), 401
+
+        if token.startswith("Bearer "):
+            token = token.split(" ")[1]
+
+        try:
+            decoded_token = jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=["HS256"], options={"verify_aud": False})
+            user_id = decoded_token.get("sub")
+            user_email = decoded_token.get("email", "")
+
+            # 🔹 Define admin email(s)
+            ADMIN_EMAILS = ["admin@example.com"]  # Add more if needed
+
+            # 🔹 Check if the user's email is in the admin list
+            if user_email not in ADMIN_EMAILS:
+                return jsonify({"error": "Admin access required!"}), 403
+
+            return f(user_id, *args, **kwargs)
+
+        except jwt.ExpiredSignatureError:
+            return jsonify({"error": "Token has expired!"}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({"error": "Invalid token!"}), 401
+
+    return decorated
