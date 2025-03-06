@@ -5,24 +5,23 @@ from time import time  # For Unix timestamp
 
 leaderboard_blueprint = Blueprint("leaderboard", __name__)
 
-# 🔹 Submit Score API (Requires Token)
 @leaderboard_blueprint.route("/submit_score", methods=["POST"])
 @token_required
 def submit_score(user_id):
     try:
         data = request.json
-        new_score = data.get("score")  # Score from this level
+        new_score = data.get("score")
 
         if new_score is None:
             return jsonify({"error": "Score is required"}), 400
 
-        # 🔹 Fetch the existing score
+        # 🔹 Check if user already has a score
         response = supabase_client.table("leaderboard").select("total_score").eq("user_id", user_id).execute()
 
         if response.data:
-            # 🔹 Option 1: Add new score to total score (Running Total)
+            # 🔹 Update the existing score (add new score)
             current_score = response.data[0]["total_score"]
-            updated_score = current_score + new_score
+            updated_score = current_score + new_score  # Running total
 
             update_response = supabase_client.table("leaderboard").update({
                 "total_score": updated_score,
@@ -42,7 +41,9 @@ def submit_score(user_id):
         return jsonify({"error": str(e)}), 500
 
 
-# 🔹 Get Leaderboard API (With Sorting, Ranking, and Pagination)
+
+from datetime import datetime
+
 @leaderboard_blueprint.route("/leaderboard", methods=["GET"])
 def get_leaderboard():
     try:
@@ -67,6 +68,10 @@ def get_leaderboard():
             user_scores[user_id]["total_score"] += entry["total_score"]
             user_scores[user_id]["latest_timestamp"] = max(user_scores[user_id]["latest_timestamp"], entry["timestamp"])
 
+        # Convert Unix timestamps to human-readable format
+        for user in user_scores.values():
+            user["latest_timestamp"] = datetime.utcfromtimestamp(user["latest_timestamp"]).strftime('%Y-%m-%d %H:%M:%S UTC')
+
         # Convert to sorted list
         leaderboard = sorted(user_scores.values(), key=lambda x: x["total_score"], reverse=True)
 
@@ -89,6 +94,42 @@ def get_leaderboard():
             "total_pages": total_pages,
             "total_entries": total_entries
         })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@leaderboard_blueprint.route("/reset_score", methods=["POST"])
+@token_required
+def reset_score(user_id):
+    try:
+        # 🔹 Update score to 0
+        update_response = supabase_client.table("leaderboard").update({
+            "total_score": 0,
+            "timestamp": int(time())  # Update timestamp
+        }).eq("user_id", user_id).execute()
+
+        return jsonify({"message": "Score has been reset to 0!"})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@leaderboard_blueprint.route("/update_score", methods=["POST"])
+@token_required
+def update_score(user_id):
+    try:
+        data = request.json
+        new_score = data.get("score")
+
+        if new_score is None:
+            return jsonify({"error": "Score is required"}), 400
+
+        # 🔹 Overwrite the score instead of adding
+        update_response = supabase_client.table("leaderboard").update({
+            "total_score": new_score,
+            "timestamp": int(time())  # Update timestamp
+        }).eq("user_id", user_id).execute()
+
+        return jsonify({"message": "Score updated successfully!", "new_score": new_score})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
