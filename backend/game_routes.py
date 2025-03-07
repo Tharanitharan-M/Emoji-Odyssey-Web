@@ -5,8 +5,13 @@ import uuid
 import random
 import string
 from datetime import datetime, timedelta
+from flask import Blueprint, request, jsonify
+from config import supabase_client
+from middleware import token_required
+
 
 game_blueprint = Blueprint("game", __name__)
+multiplayer_blueprint = Blueprint("multiplayer", __name__)
 
 # 🔹 Generate a unique room code
 def generate_room_code():
@@ -258,7 +263,7 @@ def get_emoji_puzzle(user_id, room_id, genre):
 
 
 
-@game_blueprint.route("/submit_emoji_answer", methods=["POST"])
+@multiplayer_blueprint.route("/submit_emoji_answer", methods=["POST"])
 @token_required
 def submit_emoji_answer(user_id):
     try:
@@ -270,83 +275,102 @@ def submit_emoji_answer(user_id):
         if not room_id or not puzzle_id or not player_answer:
             return jsonify({"error": "room_id, puzzle_id, and answer are required"}), 400
 
-        # Validate room_id
-        try:
-            room_id = str(uuid.UUID(room_id))
-        except ValueError:
-            return jsonify({"error": "Invalid room_id format"}), 400
-
-        # Fetch game state
-        game_state_response = supabase_client.table("game_state").select("*").eq("room_id", room_id).execute()
+        # 🔹 Fetch game state
+        game_state_response = supabase_client.table("game_state").select("current_turn", "game_data", "current_round", "total_rounds").eq("room_id", room_id).execute()
 
         if not game_state_response.data:
             return jsonify({"error": "Game state not found"}), 404
 
         game_data = game_state_response.data[0]
-        turn_end_time = game_data["turn_end_time"]
+        current_turn = game_data["current_turn"]
+        current_round = game_data["current_round"]
+        total_rounds = game_data["total_rounds"]
 
-        # Check if the turn timer expired
-        if turn_end_time and datetime.utcnow().isoformat() > turn_end_time:
-            return jsonify({"error": "Time is up! Your turn has been skipped."}), 400
+        # 🔹 Fetch the host ID of the room
+        room_response = supabase_client.table("game_rooms").select("host_id").eq("id", room_id).execute()
+        if not room_response.data:
+            return jsonify({"error": "Room not found"}), 404
 
-        # Fetch the correct answer
-        response = supabase_client.table("emoji_puzzles").select("correct_answer", "genre").eq("id", puzzle_id).execute()
+        host_id = room_response.data[0]["host_id"]
 
+        # 🔹 Prevent the host from guessing
+        if user_id == host_id:
+            return jsonify({"error": "The host cannot guess. Only other players can answer."}), 403
+
+        # 🔹 Ensure it's the correct player's turn
+        if current_turn != user_id:
+            return jsonify({"error": "Not your turn!"}), 403
+
+        # 🔹 Fetch the correct answer
+        response = supabase_client.table("emoji_puzzles").select("correct_answer").eq("id", puzzle_id).execute()
         if not response.data:
             return jsonify({"error": "Invalid puzzle ID"}), 404
 
         correct_answer = response.data[0]["correct_answer"]
-        genre = response.data[0]["genre"]
 
-        # Get current scores
+        # 🔹 Get current scores
         current_scores = game_data["game_data"].get("scores", {})
 
-        # Check if answer is correct
+        # 🔹 Check if answer is correct
         if player_answer.strip().lower() == correct_answer.strip().lower():
-            current_scores[genre][user_id] = current_scores[genre].get(user_id, 0) + 10
+            current_scores[user_id] = current_scores.get(user_id, 0) + 10
             is_correct = True
         else:
             is_correct = False
 
-        # Check if this was the last round
-        current_round = game_data["current_round"]
-        total_rounds = game_data["total_rounds"]
+        # 🔹 Fetch all players in the room
+        players_response = supabase_client.table("players_in_room").select("user_id").eq("room_id", room_id).execute()
+        if not players_response.data or len(players_response.data) < 2:
+            return jsonify({"error": "No other players in the game"}), 404
 
+        all_players = [p["user_id"] for p in players_response.data]
+
+        # 🔹 Ensure turn switches between two players
+        if len(all_players) == 2:
+            next_player = all_players[0] if user_id == all_players[1] else all_players[1]
+        else:
+            current_index = all_players.index(user_id)
+            next_player = all_players[(current_index + 1) % len(all_players)]
+
+        # 🔹 Check if this was the last round
         if current_round >= total_rounds:
-            # Game Over - Determine Winner
-            winner_id = max(current_scores[genre], key=current_scores[genre].get)
-            winner_score = current_scores[genre][winner_id]
+            # 🎯 Determine the winner (player with the highest score)
+            winner = max(current_scores, key=current_scores.get) if current_scores else "No winner"
 
-            # Update game state to inactive
-            supabase_client.table("game_state").update({
-                "is_active": False,
-                "updated_at": datetime.utcnow().isoformat()
-            }).eq("room_id", room_id).execute()
+            # 🔹 Store final scores in leaderboard
+            for player_id, score in current_scores.items():
+                supabase_client.table("leaderboard").insert({
+                    "user_id": player_id,
+                    "total_score": score,
+                    "genre": "multiplayer",  # You can change this if needed
+                    "timestamp": datetime.utcnow().isoformat()
+                }).execute()
 
             return jsonify({
-                "message": "Game Over!",
-                "winner_id": winner_id,
-                "winner_score": winner_score
+                "correct": is_correct,
+                "message": "Game over! Winner declared!",
+                "winner": winner,
+                "final_scores": current_scores
             })
 
-        # Otherwise, increase round count
-        new_round = current_round + 1
-
-        # Update game state with new score & round count
+        # 🔹 Update game state with new turn, scores, and increase round count
         supabase_client.table("game_state").update({
             "game_data": { "scores": current_scores },
-            "current_round": new_round,
-            "updated_at": datetime.utcnow().isoformat()
+            "current_turn": next_player,
+            "current_round": current_round + 1  # Move to next round
         }).eq("room_id", room_id).execute()
 
         return jsonify({
             "correct": is_correct,
             "message": "Answer submitted successfully!",
-            "new_score": current_scores[genre][user_id]
+            "new_score": current_scores[user_id],
+            "next_turn": next_player
         })
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
 
 
 
