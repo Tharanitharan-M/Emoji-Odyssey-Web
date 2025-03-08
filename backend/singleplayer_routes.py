@@ -1,6 +1,5 @@
 from flask import Blueprint, request, jsonify
 from config import supabase_client
-import random
 from datetime import datetime
 
 singleplayer_blueprint = Blueprint("singleplayer", __name__)
@@ -17,135 +16,77 @@ def get_genres():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# 🔹 Get Predefined Levels for a Selected Genre
-@singleplayer_blueprint.route("/get_levels/<genre>", methods=["GET"])
-def get_levels(genre):
+# 🔹 Get Levels for a Selected Genre (Up to Player's Progress)
+@singleplayer_blueprint.route("/get_levels/<user_id>/<genre>", methods=["GET"])
+def get_levels(user_id, genre):
     try:
-        response = supabase_client.table("emoji_puzzles").select("id", "emoji_clue").eq("genre", genre).execute()
-        if not response.data:
-            return jsonify({"error": "No levels found for this genre"}), 404
+        # Get the player's progress
+        progress_response = supabase_client.table("player_progress").select("completed_levels").eq("user_id", user_id).eq("genre", genre).execute()
+        completed_levels = int(progress_response.data[0]["completed_levels"]) if progress_response.data else 0
 
-        levels = [{"level_id": entry["id"], "emoji_clue": entry["emoji_clue"]} for entry in response.data]
-        return jsonify({"levels": levels})
+        # Fetch only the next level for the player's progress
+        response = supabase_client.table("emoji_puzzles").select("level_number", "emoji_clue").eq("genre", genre).eq("level_number", completed_levels + 1).execute()
+        if not response.data:
+            return jsonify({"error": "No next level found. You completed all levels!"}), 404
+
+        levels = [{"level_number": int(entry["level_number"]), "emoji_clue": entry["emoji_clue"]} for entry in response.data]
+
+        return jsonify({"levels": levels, "completed_levels": completed_levels})
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# 🔹 Submit Answer for Single Player Mode
+
+# 🔹 Submit Answer for Singleplayer Mode
 @singleplayer_blueprint.route("/submit_answer", methods=["POST"])
 def submit_answer():
     try:
         data = request.json
         user_id = data.get("user_id")
-        level_id = data.get("level_id")
+        level_number = data.get("level_number")  # ✅ Updated to `level_number`
         player_answer = data.get("answer")
 
-        if not user_id or not level_id or not player_answer:
-            return jsonify({"error": "user_id, level_id, and answer are required"}), 400
+        if not user_id or level_number is None or not player_answer:
+            return jsonify({"error": "user_id, level_number, and answer are required"}), 400
 
-        # Fetch correct answer from database
-        response = supabase_client.table("emoji_puzzles").select("correct_answer", "genre").eq("id", level_id).execute()
-        if not response.data:
-            return jsonify({"error": "Invalid level ID"}), 404
-
-        correct_answer = response.data[0]["correct_answer"]
-        genre = response.data[0]["genre"]
-
-        # Check if the answer is correct
-        if player_answer.strip().lower() == correct_answer.strip().lower():
-            is_correct = True
-            score_increment = 10  # Single-player mode fixed score per level
-        else:
-            is_correct = False
-            score_increment = 0
-
-        # Update the leaderboard for the single player
-        leaderboard_response = supabase_client.table("leaderboard").select("total_score").eq("user_id", user_id).eq("genre", genre).execute()
-
-        if leaderboard_response.data:
-            current_score = leaderboard_response.data[0]["total_score"]
-            updated_score = current_score + score_increment
-            supabase_client.table("leaderboard").update({"total_score": updated_score}).eq("user_id", user_id).eq("genre", genre).execute()
-        else:
-            supabase_client.table("leaderboard").insert({"user_id": user_id, "total_score": score_increment, "genre": genre}).execute()
-
-        return jsonify({
-            "correct": is_correct,
-            "message": "Answer submitted successfully!",
-            "new_score": updated_score if is_correct else current_score
-        })
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@singleplayer_blueprint.route("/get_levels/<user_id>/<genre>", methods=["GET"])
-def fetch_levels(user_id, genre):
-    try:
-        # Get the player's progress
-        progress_response = supabase_client.table("player_progress").select("completed_levels").eq("user_id", user_id).eq("genre", genre).execute()
-        
+        # Check if player has already completed this level
+        progress_response = supabase_client.table("player_progress").select("completed_levels").eq("user_id", user_id).eq("genre", "movies").execute()
         completed_levels = progress_response.data[0]["completed_levels"] if progress_response.data else 0
 
-        # Fetch only levels up to the player's progress
-        response = supabase_client.table("emoji_puzzles").select("id", "emoji_clue").eq("genre", genre).limit(completed_levels + 1).execute()
+        if completed_levels >= level_number:  # ✅ Ensure points are given only once
+            return jsonify({
+                "correct": False,
+                "message": "You have already completed this level. No extra points awarded!",
+                "new_score": completed_levels * 10  # Score remains the same
+            })
 
+        # Fetch correct answer
+        response = supabase_client.table("emoji_puzzles").select("correct_answer", "genre").eq("level_number", level_number).execute()
         if not response.data:
-            return jsonify({"error": "No levels found for this genre"}), 404
-
-        levels = [{"level_id": entry["id"], "emoji_clue": entry["emoji_clue"]} for entry in response.data]
-        return jsonify({"levels": levels, "completed_levels": completed_levels})
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    
-@singleplayer_blueprint.route("/submit_answer", methods=["POST"])
-def submit_singleplayer_answer():
-    try:
-        data = request.json
-        user_id = data.get("user_id")
-        level_id = data.get("level_id")
-        player_answer = data.get("answer")
-
-        if not user_id or not level_id or not player_answer:
-            return jsonify({"error": "user_id, level_id, and answer are required"}), 400
-
-        # Fetch correct answer from database
-        response = supabase_client.table("emoji_puzzles").select("correct_answer", "genre").eq("id", level_id).execute()
-        if not response.data:
-            return jsonify({"error": "Invalid level ID"}), 404
+            return jsonify({"error": "Invalid level number"}), 404
 
         correct_answer = response.data[0]["correct_answer"]
         genre = response.data[0]["genre"]
 
         # Check if the answer is correct
-        if player_answer.strip().lower() == correct_answer.strip().lower():
-            is_correct = True
-            score_increment = 10  # Single-player mode fixed score per level
-        else:
-            is_correct = False
-            score_increment = 0
+        is_correct = player_answer.strip().lower() == correct_answer.strip().lower()
+        score_increment = 10 if is_correct else 0
 
-        # Update the leaderboard
+        # Update leaderboard score only if not completed before
         leaderboard_response = supabase_client.table("leaderboard").select("total_score").eq("user_id", user_id).eq("genre", genre).execute()
+        current_score = leaderboard_response.data[0]["total_score"] if leaderboard_response.data else 0
+        updated_score = current_score + score_increment
 
-        if leaderboard_response.data:
-            current_score = leaderboard_response.data[0]["total_score"]
-            updated_score = current_score + score_increment
-            supabase_client.table("leaderboard").update({"total_score": updated_score}).eq("user_id", user_id).eq("genre", genre).execute()
-        else:
-            supabase_client.table("leaderboard").insert({"user_id": user_id, "total_score": score_increment, "genre": genre}).execute()
-
-        # If correct, update progress (unlock next level)
         if is_correct:
-            progress_response = supabase_client.table("player_progress").select("completed_levels").eq("user_id", user_id).eq("genre", genre).execute()
-            if progress_response.data:
-                current_progress = progress_response.data[0]["completed_levels"]
-                supabase_client.table("player_progress").update({"completed_levels": current_progress + 1}).eq("user_id", user_id).eq("genre", genre).execute()
-            else:
-                supabase_client.table("player_progress").insert({"user_id": user_id, "genre": genre, "completed_levels": 1}).execute()
+            # Update player progress (unlock next level)
+            supabase_client.table("player_progress").update({"completed_levels": completed_levels + 1}).eq("user_id", user_id).eq("genre", genre).execute()
+
+            # Update leaderboard score
+            supabase_client.table("leaderboard").update({"total_score": updated_score}).eq("user_id", user_id).eq("genre", genre).execute()
 
         return jsonify({
             "correct": is_correct,
-            "message": "Answer submitted successfully!",
+            "message": "Answer submitted successfully!" if is_correct else "Wrong answer!",
             "new_score": updated_score if is_correct else current_score
         })
 

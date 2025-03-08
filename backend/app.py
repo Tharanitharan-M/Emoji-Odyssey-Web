@@ -13,7 +13,7 @@ app.register_blueprint(auth_blueprint, url_prefix="/auth")
 app.register_blueprint(leaderboard_blueprint, url_prefix="/leaderboard")
 app.register_blueprint(chat_blueprint, url_prefix="/chat")
 app.register_blueprint(game_blueprint, url_prefix="/game")
-app.register_blueprint(singleplayer_blueprint, url_prefix="/single_player")
+app.register_blueprint(singleplayer_blueprint, url_prefix="/singleplayer")
 app.register_blueprint(multiplayer_blueprint, url_prefix="/multiplayer")
 
 

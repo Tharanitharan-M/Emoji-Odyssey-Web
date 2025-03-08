@@ -13,14 +13,16 @@ def create_room():
     try:
         data = request.json
         host_id = data.get("host_id")
+        total_rounds = data.get("total_rounds", 5)
 
         if not host_id:
             return jsonify({"error": "host_id is required"}), 400
 
+        # Generate room ID & Code
         room_id = str(uuid.uuid4())
-        room_code = ''.join(random.choices("ABCDEFGHIJKLMNOPQRSTUVWXYZ", k=6))  # Generate a 6-letter room code
+        room_code = ''.join(random.choices("ABCDEFGHIJKLMNOPQRSTUVWXYZ", k=6))
 
-        # Insert into game_rooms table
+        # Insert new room
         supabase_client.table("game_rooms").insert({
             "id": room_id,
             "room_code": room_code,
@@ -28,26 +30,18 @@ def create_room():
             "created_at": datetime.utcnow().isoformat()
         }).execute()
 
-        # Insert the host as the first player in the room
+        # Host joins the room first
         supabase_client.table("players_in_room").insert({
-            "id": str(uuid.uuid4()),
             "room_id": room_id,
             "user_id": host_id,
             "joined_at": datetime.utcnow().isoformat()
         }).execute()
 
-        # Automatically create a game state for the room, setting host as first turn
-        supabase_client.table("game_state").insert({
-            "id": str(uuid.uuid4()),
+        return jsonify({
             "room_id": room_id,
-            "current_turn": host_id,  # Ensure the host starts first
-            "game_data": {"scores": {}},
-            "is_active": True,
-            "total_rounds": 5,
-            "current_round": 1
-        }).execute()
-
-        return jsonify({"room_id": room_id, "room_code": room_code})
+            "room_code": room_code,
+            "total_rounds": total_rounds
+        })
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -64,29 +58,40 @@ def join_room():
         if not room_code or not user_id:
             return jsonify({"error": "room_code and user_id are required"}), 400
 
-        # 🔹 Find the room using the room_code
-        room_response = supabase_client.table("game_rooms").select("id").eq("room_code", room_code).execute()
-
+        # Find the room
+        room_response = supabase_client.table("game_rooms").select("id", "host_id").eq("room_code", room_code).execute()
         if not room_response.data:
             return jsonify({"error": "Invalid room code"}), 404
 
         room_id = room_response.data[0]["id"]
+        host_id = room_response.data[0]["host_id"]
 
-        # 🔹 Check if the player is already in the room
-        existing_player_response = supabase_client.table("players_in_room").select("user_id").eq("room_id", room_id).eq("user_id", user_id).execute()
-
-        if existing_player_response.data:
-            return jsonify({"message": "Player already in room", "room_id": room_id})
-
-        # 🔹 Add player to the room
+        # Add player to the room
         supabase_client.table("players_in_room").insert({
-            "id": str(uuid.uuid4()),
             "room_id": room_id,
             "user_id": user_id,
             "joined_at": datetime.utcnow().isoformat()
         }).execute()
 
-        return jsonify({"room_id": room_id, "message": "Player joined the room successfully!"})
+        # Fetch all players in the room
+        players_response = supabase_client.table("players_in_room").select("user_id").eq("room_id", room_id).execute()
+        players = [p["user_id"] for p in players_response.data if p["user_id"] != host_id]  # Exclude host
+
+        if len(players) == 1:
+            first_player = players[0]
+            # Set first turn in game_state
+            supabase_client.table("game_state").insert({
+                "room_id": room_id,
+                "current_turn": first_player,
+                "total_rounds": 5,
+                "current_round": 1,
+                "is_active": True
+            }).execute()
+
+        return jsonify({
+            "room_id": room_id,
+            "message": "Player joined the room successfully!"
+        })
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -94,123 +99,121 @@ def join_room():
 
 # 🔹 Submit an Emoji in Multiplayer Mode (Host Only)
 @multiplayer_blueprint.route("/set_emoji", methods=["POST"])
-@token_required
-def set_emoji(user_id):
+def set_emoji():
     try:
         data = request.json
         room_id = data.get("room_id")
+        host_id = data.get("host_id")
         emoji_clue = data.get("emoji_clue")
         correct_answer = data.get("correct_answer")
 
-        if not room_id or not emoji_clue or not correct_answer:
-            return jsonify({"error": "room_id, emoji_clue, and correct_answer are required"}), 400
+        if not room_id or not host_id or not emoji_clue or not correct_answer:
+            return jsonify({"error": "room_id, host_id, emoji_clue, and correct_answer are required"}), 400
 
-        # 🔹 Fetch the host ID
-        room_response = supabase_client.table("game_rooms").select("host_id").eq("id", room_id).execute()
+        # Ensure the room exists
+        room_response = supabase_client.table("game_rooms").select("id").eq("id", room_id).execute()
         if not room_response.data:
-            return jsonify({"error": "Room not found"}), 404
+            return jsonify({"error": "Invalid room ID"}), 404
 
-        host_id = room_response.data[0]["host_id"]
-
-        # 🔹 Get all players in the room
-        players_response = supabase_client.table("players_in_room").select("user_id").eq("room_id", room_id).execute()
-        if not players_response.data or len(players_response.data) < 2:
-            return jsonify({"error": "No other players in the room"}), 404
-
-        all_players = [p["user_id"] for p in players_response.data]
-
-        # 🔹 Select the first player who is NOT the host
-        first_player = next(player for player in all_players if player != host_id)
-
-        # 🔹 Update the game state to set the first turn
-        supabase_client.table("game_state").update({
-            "current_turn": first_player  # 🎯 First player starts, NOT the host
+        # Store the puzzle in `game_state`
+        puzzle_response = supabase_client.table("game_state").update({
+            "game_data": {
+                "emoji_clue": emoji_clue,
+                "correct_answer": correct_answer
+            },
+            "updated_at": datetime.utcnow().isoformat()
         }).eq("room_id", room_id).execute()
 
-        return jsonify({"message": "Emoji puzzle set successfully!", "next_turn": first_player})
+        return jsonify({
+            "message": "Multiplayer emoji puzzle set successfully!"
+        })
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 @multiplayer_blueprint.route("/submit_emoji_answer", methods=["POST"])
-@token_required
-def submit_emoji_answer(user_id):
+def submit_emoji_answer():
     try:
         data = request.json
         room_id = data.get("room_id")
-        puzzle_id = data.get("puzzle_id")
+        user_id = data.get("user_id")
         player_answer = data.get("answer")
 
-        if not room_id or not puzzle_id or not player_answer:
-            return jsonify({"error": "room_id, puzzle_id, and answer are required"}), 400
+        if not room_id or not user_id or not player_answer:
+            return jsonify({"error": "room_id, user_id, and answer are required"}), 400
 
-        # 🔹 Fetch game state
-        game_state_response = supabase_client.table("game_state").select("current_turn", "game_data").eq("room_id", room_id).execute()
+        # Fetch game state for this room
+        game_state_response = supabase_client.table("game_state").select("current_turn", "game_data", "total_rounds", "current_round", "is_active").eq("room_id", room_id).execute()
 
         if not game_state_response.data:
             return jsonify({"error": "Game state not found"}), 404
 
-        game_data = game_state_response.data[0]
-        current_turn = game_data["current_turn"]
+        game_state = game_state_response.data[0]
+        current_turn = game_state["current_turn"]
+        game_data = game_state["game_data"]
+        total_rounds = game_state["total_rounds"]
+        current_round = game_state["current_round"]
+        is_active = game_state["is_active"]
 
-        # 🔹 Fetch the host ID of the room
-        room_response = supabase_client.table("game_rooms").select("host_id").eq("id", room_id).execute()
-        if not room_response.data:
-            return jsonify({"error": "Room not found"}), 404
+        # If the game is already finished, prevent further actions
+        if not is_active:
+            return jsonify({"error": "The game has already ended!"}), 403
 
-        host_id = room_response.data[0]["host_id"]
+        # Get the correct puzzle data
+        if "emoji_clue" not in game_data or "correct_answer" not in game_data:
+            return jsonify({"error": "No active puzzle found in this room"}), 400
 
-        # 🔹 Prevent the host from guessing
-        if user_id == host_id:
-            return jsonify({"error": "The host cannot guess. Only other players can answer."}), 403
+        correct_answer = game_data["correct_answer"]
 
-        # 🔹 Ensure it's the correct player's turn
-        if current_turn != user_id:
-            return jsonify({"error": "Not your turn!"}), 403
-
-        # 🔹 Fetch the correct answer
-        response = supabase_client.table("emoji_puzzles").select("correct_answer").eq("id", puzzle_id).execute()
-        if not response.data:
-            return jsonify({"error": "Invalid puzzle ID"}), 404
-
-        correct_answer = response.data[0]["correct_answer"]
-
-        # 🔹 Get current scores
-        current_scores = game_data["game_data"].get("scores", {})
-
-        # 🔹 Check if answer is correct
-        if player_answer.strip().lower() == correct_answer.strip().lower():
-            current_scores[user_id] = current_scores.get(user_id, 0) + 10
-            is_correct = True
-        else:
-            is_correct = False
-
-        # 🔹 Fetch all players in the room
+        # Fetch all players in the room
         players_response = supabase_client.table("players_in_room").select("user_id").eq("room_id", room_id).execute()
-        if not players_response.data or len(players_response.data) < 2:
-            return jsonify({"error": "No other players in the game"}), 404
+        players = [p["user_id"] for p in players_response.data]
 
-        all_players = [p["user_id"] for p in players_response.data]
+        if len(players) < 2:
+            return jsonify({"error": "No other players in the game"}), 403  # Ensure at least 2 players exist
 
-        # 🔹 Ensure turn switches between two players
-        if len(all_players) == 2:
-            next_player = all_players[0] if user_id == all_players[1] else all_players[1]
-        else:
-            current_index = all_players.index(user_id)
-            next_player = all_players[(current_index + 1) % len(all_players)]
+        # Check if the answer is correct
+        is_correct = player_answer.strip().lower() == correct_answer.strip().lower()
+        score_increment = 10 if is_correct else 0
 
-        # 🔹 Update game state with new turn and scores
-        supabase_client.table("game_state").update({
-            "game_data": { "scores": current_scores },
-            "current_turn": next_player
-        }).eq("room_id", room_id).execute()
+        # Fetch the current leaderboard score
+        leaderboard_response = supabase_client.table("leaderboard").select("total_score").eq("user_id", user_id).execute()
+        current_score = leaderboard_response.data[0]["total_score"] if leaderboard_response.data else 0
+        updated_score = current_score + score_increment
+
+        if is_correct:
+            # Update the player's score
+            supabase_client.table("leaderboard").update({"total_score": updated_score}).eq("user_id", user_id).execute()
+
+            # Check if the game should end
+            if current_round >= total_rounds:
+                # End the game
+                supabase_client.table("game_state").update({
+                    "is_active": False
+                }).eq("room_id", room_id).execute()
+
+                return jsonify({
+                    "correct": True,
+                    "message": "Game over! Final scores are updated.",
+                    "new_score": updated_score
+                })
+
+            # Get the next player in turn order
+            current_index = players.index(user_id)
+            next_player = players[(current_index + 1) % len(players)]  # Rotate turn
+
+            # Update game state with the next turn and increase round count
+            supabase_client.table("game_state").update({
+                "current_turn": next_player,
+                "current_round": current_round + 1
+            }).eq("room_id", room_id).execute()
 
         return jsonify({
             "correct": is_correct,
-            "message": "Answer submitted successfully!",
-            "new_score": current_scores[user_id],
-            "next_turn": next_player
+            "message": "Answer submitted successfully!" if is_correct else "Wrong answer!",
+            "new_score": updated_score if is_correct else current_score,
+            "next_turn": next_player if is_correct else current_turn
         })
 
     except Exception as e:

@@ -18,40 +18,55 @@ def generate_room_code():
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
 
 # 🔹 Create a game room
-@game_blueprint.route("/create_room", methods=["POST"])
-@token_required
-def create_room(user_id):
+@multiplayer_blueprint.route("/create_room", methods=["POST"])
+def create_room():
     try:
-        room_code = generate_room_code()
+        data = request.json
+        host_id = data.get("host_id")
+        total_rounds = data.get("total_rounds", 5)  # Default to 5 rounds if not provided
 
-        # Create a new game room
-        response = supabase_client.table("game_rooms").insert({
+        if not host_id:
+            return jsonify({"error": "host_id is required"}), 400
+
+        room_id = str(uuid.uuid4())
+        room_code = ''.join(random.choices("ABCDEFGHIJKLMNOPQRSTUVWXYZ", k=6))  # Generate a 6-letter room code
+
+        # Insert into game_rooms table
+        supabase_client.table("game_rooms").insert({
+            "id": room_id,
             "room_code": room_code,
-            "host_id": user_id,
+            "host_id": host_id,
             "created_at": datetime.utcnow().isoformat()
         }).execute()
 
-        room_id = response.data[0]["id"]
-
-        # 🔹 Set up the initial game state with the first turn
-        supabase_client.table("game_state").insert({
+        # Insert the host as the first player in the room
+        supabase_client.table("players_in_room").insert({
+            "id": str(uuid.uuid4()),
             "room_id": room_id,
-            "current_turn": user_id,  # 🔹 First turn is the host
-            "game_data": { "scores": {} },
-            "current_round": 1,
+            "user_id": host_id,
+            "joined_at": datetime.utcnow().isoformat()
+        }).execute()
+
+        # Automatically create a game state for the room
+        supabase_client.table("game_state").insert({
+            "id": str(uuid.uuid4()),
+            "room_id": room_id,
+            "current_turn": host_id,  # Host starts first
+            "game_data": {"scores": {}},
             "is_active": True,
-            "total_rounds": 5,
-            "updated_at": datetime.utcnow().isoformat()
+            "total_rounds": total_rounds,  # 🔹 Ensure total rounds are stored
+            "current_round": 1
         }).execute()
 
         return jsonify({
             "room_id": room_id,
             "room_code": room_code,
-            "message": "Game room created successfully! First turn set to host."
+            "total_rounds": total_rounds  # 🔹 Now included in response
         })
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 
 @game_blueprint.route("/join_room", methods=["POST"])
