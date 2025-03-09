@@ -1,25 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 
-export default function LoginPage() {
+export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const { setToken } = useAuth();
   const router = useRouter();
 
-  const handleLogin = () => {
-    const dummyToken = "dummy_jwt_token";
-    setToken(dummyToken);
-    router.push("/game-mode");
+  const handleSignup = () => {
+    console.log("User registered:", { email, password });
+    router.push("/auth/login");
   };
 
   return (
     <div className="h-screen flex flex-col items-center justify-center bg-gray-100">
       <div className="p-6 bg-white rounded shadow-md w-80">
-        <h2 className="text-xl font-bold mb-4">Login</h2>
+        <h2 className="text-xl font-bold mb-4">Sign Up</h2>
         <input
           type="email"
           placeholder="Email"
@@ -34,16 +31,16 @@ export default function LoginPage() {
           onChange={(e) => setPassword(e.target.value)}
           className="w-full p-2 mb-4 border rounded"
         />
-        <button onClick={handleLogin} className="w-full bg-blue-500 text-white py-2 rounded">
-          Login
+        <button onClick={handleSignup} className="w-full bg-green-500 text-white py-2 rounded">
+          Sign Up
         </button>
         <p className="text-center mt-4">
-          Don't have an account?{" "}
+          Already have an account?{" "}
           <button
-            onClick={() => router.push("/auth/signup")}
+            onClick={() => router.push("/auth/login")}
             className="text-blue-500 underline"
           >
-            Sign Up
+            Login
           </button>
         </p>
       </div>
