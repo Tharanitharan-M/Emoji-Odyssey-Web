@@ -37,17 +37,20 @@ export default function CreateRoomPage() {
     }
   };
 
+  // Optimized Player Fetching
   useEffect(() => {
-    const interval = setInterval(async () => {
-      if (roomId) {
+    let interval: NodeJS.Timeout;
+
+    if (roomId) {
+      interval = setInterval(async () => {
         try {
           const response = await api.get(`/multiplayer/get_players/${roomId}`);
           setPlayers(response.data.players || []);
         } catch (error) {
           console.error("Error fetching players", error);
         }
-      }
-    }, 2000);
+      }, 3000); // Poll every 3 seconds
+    }
 
     return () => clearInterval(interval);
   }, [roomId]);
@@ -99,7 +102,6 @@ export default function CreateRoomPage() {
             Room Code: <strong className="text-xl">{roomCode}</strong>
           </p>
 
-          {/* Players List */}
           <h2 className="text-xl font-semibold mb-2">Players in Room:</h2>
           <ul className="bg-white shadow p-4 rounded w-60">
             {players.length > 0 ? (
