@@ -58,39 +58,30 @@ def join_room():
         data = request.json
         room_code = data.get("room_code")
         user_id = data.get("user_id")
+        player_name = data.get("player_name")
 
-        if not room_code or not user_id:
-            return jsonify({"error": "room_code and user_id are required"}), 400
+        if not room_code or not user_id or not player_name:
+            return jsonify({"error": "room_code, user_id, and player_name are required"}), 400
 
-        # Find the room
+        # ✅ Validate Room Code
         room_response = supabase_client.table("game_rooms").select("id", "host_id").eq("room_code", room_code).execute()
         if not room_response.data:
             return jsonify({"error": "Invalid room code"}), 404
 
         room_id = room_response.data[0]["id"]
-        host_id = room_response.data[0]["host_id"]
 
-        # Add player to the room
+        # ✅ Check if Player Already Exists
+        existing_player = supabase_client.table("players_in_room").select("id").eq("room_id", room_id).eq("user_id", user_id).execute()
+        if existing_player.data:
+            return jsonify({"message": "Player already in the room!"}), 200
+
+        # ✅ Insert Player into the Room
         supabase_client.table("players_in_room").insert({
             "room_id": room_id,
             "user_id": user_id,
+            "username": player_name,
             "joined_at": datetime.utcnow().isoformat()
         }).execute()
-
-        # Fetch all players in the room
-        players_response = supabase_client.table("players_in_room").select("user_id").eq("room_id", room_id).execute()
-        players = [p["user_id"] for p in players_response.data if p["user_id"] != host_id]  # Exclude host
-
-        if len(players) == 1:
-            first_player = players[0]
-            # Set first turn in game_state
-            supabase_client.table("game_state").insert({
-                "room_id": room_id,
-                "current_turn": first_player,
-                "total_rounds": 5,
-                "current_round": 1,
-                "is_active": True
-            }).execute()
 
         return jsonify({
             "room_id": room_id,
@@ -98,7 +89,9 @@ def join_room():
         })
 
     except Exception as e:
+        print("Error in join_room:", str(e))
         return jsonify({"error": str(e)}), 500
+
 
 
 # 🔹 Submit an Emoji in Multiplayer Mode (Host Only)
