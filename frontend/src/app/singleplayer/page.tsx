@@ -7,6 +7,7 @@ import api, { getUserIdFromToken } from "@/services/api";
 export default function GenreSelectionPage() {
   const [genres, setGenres] = useState<string[]>([]);
   const [scores, setScores] = useState<{ [key: string]: number }>({});
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   const handleLogout = () => {
@@ -15,38 +16,38 @@ export default function GenreSelectionPage() {
   };
 
   useEffect(() => {
-    const userId = getUserIdFromToken();
-    if (!userId) {
-      router.push("/auth/login");
-      return;
-    }
+    const fetchGenresAndScores = async () => {
+      const userId = getUserIdFromToken();
+      if (!userId) {
+        router.push("/auth/login");
+        return;
+      }
 
-    const fetchGenres = async () => {
       try {
-        const response = await api.get("/singleplayer/get_genres");
-        setGenres(response.data.genres || []);
-      } catch (error) {
-        console.error("Failed to fetch genres", error);
-      }
-    };
+        // Fetch Genres
+        const genresResponse = await api.get("/singleplayer/get_genres");
+        const fetchedGenres = genresResponse.data.genres || [];
+        setGenres(fetchedGenres);
 
-    const fetchScores = async () => {
-      for (const genre of genres) {
-        try {
-          const response = await api.get(`/singleplayer/get_score/${userId}/${genre}`);
-          setScores(prevScores => ({
-            ...prevScores,
-            [genre]: response.data.score || 0,
-          }));
-        } catch (error) {
-          console.error(`Failed to fetch score for genre: ${genre}`, error);
+        // Fetch Scores for Each Genre
+        const scoresData: { [key: string]: number } = {};
+        for (const genre of fetchedGenres) {
+          try {
+            const scoreResponse = await api.get(`/singleplayer/get_score/${userId}/${genre}`);
+            scoresData[genre] = scoreResponse.data.score || 0;
+          } catch (scoreError) {
+            console.error(`Failed to fetch score for genre: ${genre}`, scoreError);
+          }
         }
+        setScores(scoresData);
+      } catch (fetchError: any) {
+        console.error("Failed to fetch genres or scores", fetchError);
+        setError(fetchError.response?.data?.error || "Failed to load data");
       }
     };
 
-    fetchGenres();
-    fetchScores();
-  }, [genres]);
+    fetchGenresAndScores();
+  }, []);
 
   return (
     <div className="h-screen flex flex-col items-center justify-center bg-gray-100 relative">
@@ -63,23 +64,31 @@ export default function GenreSelectionPage() {
 
       <h1 className="text-3xl font-bold mb-6">Select a Genre</h1>
 
+      {error && (
+        <p className="text-red-500 mb-4">{error}</p>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-        {genres.map((genre) => (
-          <div key={genre} className="bg-white rounded-lg shadow p-4 w-60">
-            <h2 className="text-xl font-semibold capitalize mb-2">{genre}</h2>
+        {genres.length > 0 ? (
+          genres.map((genre) => (
+            <div key={genre} className="bg-white rounded-lg shadow p-4 w-60">
+              <h2 className="text-xl font-semibold capitalize mb-2">{genre}</h2>
 
-            <button
-              className="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-              onClick={() => router.push(`/singleplayer/levels?genre=${genre.toLowerCase()}`)}
-            >
-              Play
-            </button>
+              <button
+                className="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                onClick={() => router.push(`/singleplayer/levels?genre=${genre.toLowerCase()}`)}
+              >
+                Play
+              </button>
 
-            <div className="mt-2 text-sm text-gray-600">
-              Score: <span className="font-bold">{scores[genre] || 0}</span>
+              <div className="mt-2 text-sm text-gray-600">
+                Score: <span className="font-bold">{scores[genre] || 0}</span>
+              </div>
             </div>
-          </div>
-        ))}
+          ))
+        ) : (
+          <p className="text-gray-500">No genres available. Please try again later.</p>
+        )}
       </div>
     </div>
   );
