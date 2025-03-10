@@ -8,15 +8,17 @@ from datetime import datetime
 multiplayer_blueprint = Blueprint("multiplayer", __name__)
 
 # 🔹 Create a Multiplayer Room
+# 🔹 Create a Multiplayer Room
 @multiplayer_blueprint.route("/create_room", methods=["POST"])
 def create_room():
     try:
         data = request.json
         host_id = data.get("host_id")
+        username = data.get("username")
         total_rounds = data.get("total_rounds", 5)
 
-        if not host_id:
-            return jsonify({"error": "host_id is required"}), 400
+        if not host_id or not username:
+            return jsonify({"error": "host_id and username are required"}), 400
 
         # Generate room ID & Code
         room_id = str(uuid.uuid4())
@@ -27,13 +29,15 @@ def create_room():
             "id": room_id,
             "room_code": room_code,
             "host_id": host_id,
+            "total_rounds": total_rounds,
             "created_at": datetime.utcnow().isoformat()
         }).execute()
 
-        # Host joins the room first
+        # Host joins the room first with username
         supabase_client.table("players_in_room").insert({
             "room_id": room_id,
             "user_id": host_id,
+            "username": username,
             "joined_at": datetime.utcnow().isoformat()
         }).execute()
 
@@ -218,3 +222,22 @@ def submit_emoji_answer():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@multiplayer_blueprint.route("/get_players/<room_id>", methods=["GET"])
+def get_players(room_id):
+    try:
+        # Fetch players with usernames from players_in_room table
+        players_response = supabase_client.table("players_in_room").select("username").eq("room_id", room_id).execute()
+
+        if not players_response.data:
+            return jsonify({"players": []})
+
+        # Extract usernames from the response
+        players = [p["username"] for p in players_response.data]
+
+        return jsonify({"players": players})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
