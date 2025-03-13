@@ -45,7 +45,9 @@ export default function LevelsPage() {
 
   return (
     <div className="h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
-      
+      <div>
+            <BackButton to="/singleplayer" />
+        </div>
       {/* Logout Button */}
       <div className="absolute top-4 right-4">
         <button
@@ -76,14 +78,6 @@ export default function LevelsPage() {
           </button>
         ))}
       </div>
-
-      {/* Back Button */}
-      <button
-        onClick={() => router.push("/singleplayer")}
-        className="mt-6 px-6 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-      >
-        Back to Genres
-      </button>
     </div>
   );
 }

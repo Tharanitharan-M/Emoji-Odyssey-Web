@@ -64,8 +64,7 @@ export default function CreateRoomPage() {
     
     <div className="h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
       <div>
-      <BackButton to="/game-mode" />
-      {/* Your Create Room Content */}
+      <BackButton to="/multiplayer" />
     </div>
       {!roomCreated && (
         <>

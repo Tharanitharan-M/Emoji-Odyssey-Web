@@ -1,12 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import BackButton from "@/components/BackButton";
 
 export default function MultiplayerOptions() {
   const router = useRouter();
 
   return (
     <div className="h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
+      <div>
+            <BackButton to="/game-mode" />
+          </div>
       <h1 className="text-4xl font-bold mb-6">Multiplayer Options</h1>
 
       <button

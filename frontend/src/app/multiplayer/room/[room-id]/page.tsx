@@ -30,8 +30,7 @@ export default function StartGamePage() {
   return (
     <div className="h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
       <div>
-      <BackButton to="/multiplayer" />
-      {/* Your Multiplayer Room Content */}
+      <BackButton to="/multiplayer/join-room" />
     </div>
       <h1 className="text-3xl font-bold mb-6">Submit Emoji Puzzle</h1>
 

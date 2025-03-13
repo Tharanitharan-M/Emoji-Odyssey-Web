@@ -135,7 +135,6 @@ export default function GamePage() {
     <div className="h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
       <div>
       <BackButton to="/singleplayer/levels" />
-      {/* Your Single Player Game Content */}
     </div>
     
       {/* Score at Top Right */}
