@@ -1,19 +1,31 @@
-# 🚀 Emoji Odyssey - Web Game (Flask + Supabase)
+
+# 🚀 Emoji Odyssey - Multiplayer & Single Player Web Game (React + Flask + Supabase)
 
 ## 📌 Project Overview
-Emoji Odyssey is a **web-based game** where players guess words based on emoji clues. This project is built using **Flask (Backend), Supabase (Database & Auth), and React (Frontend - coming soon!)**. It features:
-- 🔐 **User Authentication (Signup & Login)** via Supabase
-- 🏆 **Leaderboard with Ranking & Pagination**
-- 🎯 **Score Submission API (Cumulative Scoring)**
-- ⏳ **Token-based Authentication (JWT)**
+**Emoji Odyssey** is a fully completed **multiplayer and single-player web game** where players guess words based on emoji clues. It features **real-time gameplay, score tracking, leaderboards, and chat functionality**. Built using **React** for the frontend, **Flask** for the backend, and **Supabase** for database, authentication, and real-time capabilities.
+
+---
+
+### 🎮 Key Features
+- 🔐 **User Authentication** (Signup & Login) via Supabase  
+- 🎯 **Single Player Mode** with progressive levels and scoring  
+- ⚔️ **Multiplayer Mode** with room creation, joining, and real-time scoring  
+- 💬 **Real-Time Chat** within multiplayer rooms  
+- 🏆 **Leaderboard System** to track top scores for both modes  
+- ⚡ **Real-Time Updates** for scores and gameplay events  
+- 🧹 **Automatic Room Cleanup** after game completion  
+- 🛠️ **Efficient Storage Management**  
+
+---
 
 ## 🛠️ Tech Stack
-- **Backend:** Flask, Supabase, Python
-- **Database:** Supabase PostgreSQL
-- **Authentication:** Supabase Auth (JWT-based)
-- **Frontend:** React (Planned)
-- **Hosting:** Vercel (Frontend), Render/Supabase Edge (Backend)
-
+| Component       | Tech Used                        |
+|-----------------|---------------------------------|
+| **Frontend**    | React, Tailwind CSS              |
+| **Backend**     | Flask, Python                    |
+| **Database**    | Supabase PostgreSQL              |
+| **Authentication** | Supabase Auth (JWT-based)      |
+| **Real-Time**   | Supabase Realtime                |
 ---
 
 ## 📥 Installation & Setup
@@ -24,116 +36,109 @@ git clone https://github.com/Tharanitharan-M/Emoji-Odyssey-Web.git
 cd emoji-odyssey
 ```
 
-### 2️⃣ **Create & Activate Virtual Environment**
+### 2️⃣ **Frontend Setup**
 ```bash
-python -m venv venv  # Create virtual environment
-source venv/bin/activate  # Activate on Mac/Linux
-venv\Scripts\activate  # Activate on Windows
+cd frontend
+npm install
+npm run dev
 ```
 
-### 3️⃣ **Install Dependencies**
+### 3️⃣ **Backend Setup**
 ```bash
+cd ../backend
+python -m venv venv
+source venv/bin/activate      # Mac/Linux
+venv\Scripts\activate       # Windows
 pip install -r requirements.txt
+python app.py
 ```
 
 ### 4️⃣ **Set Up Environment Variables** (`.env`)
-Create a `.env` file in the project root and add:
-```plaintext
+Create `.env` files in both `frontend` and `backend` directories.
+
+**Backend `.env`**
+```env
 SUPABASE_URL=https://your-supabase-url.supabase.co
 SUPABASE_KEY=your-supabase-anon-key
 SUPABASE_JWT_SECRET=your-supabase-jwt-secret
 ```
 
-### 5️⃣ **Run Flask Server**
-```bash
-python app.py
+**Frontend `.env`**
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://your-supabase-url.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 ```
 
 ---
 
-## 📌 API Documentation
+## 📌 Gameplay Flow
 
-### 🔹 **1. User Authentication**
-#### 🔹 Signup - `POST /signup`
-**Request Body:**
-```json
-{
-  "email": "user@example.com",
-  "password": "securepassword"
-}
-```
-**Response:**
-```json
-{
-  "message": "User created successfully!"
-}
-```
-
-#### 🔹 Login - `POST /login`
-**Request Body:**
-```json
-{
-  "email": "user@example.com",
-  "password": "securepassword"
-}
-```
-**Response:**
-```json
-{
-  "token": "your-jwt-token"
-}
-```
+### 🎯 **Single Player Mode**
+1. **Select Genre** → Choose from Movies, Phrases, etc.  
+2. **Solve Levels** → Progress through levels by solving emoji puzzles.  
+3. **Level Unlocking** → Unlock the next level after solving the previous one.  
+4. **Scoring** → Scores are calculated per genre and displayed on the leaderboard.
 
 ---
 
-### 🏆 **2. Leaderboard APIs**
-
-#### 🔹 Submit Score - `POST /submit_score`
-🔐 **Requires Token** (Include `Authorization: Bearer <token>` header)
-
-**Request Body:**
-```json
-{
-  "score": 50
-}
-```
-**Response:**
-```json
-{
-  "message": "Score updated successfully!",
-  "total_score": 150
-}
-```
-
-#### 🔹 Get Leaderboard - `GET /leaderboard?page=1&per_page=10`
-**Response:**
-```json
-{
-  "leaderboard": [
-    {
-      "rank": 1,
-      "user_id": "5bbf0ca5-d80d-44ed-890e-1c02d69379be",
-      "total_score": 200,
-      "latest_timestamp": 1712136784
-    }
-  ],
-  "page": 1,
-  "per_page": 10,
-  "total_entries": 15,
-  "total_pages": 2
-}
-```
+### ⚔️ **Multiplayer Mode**
+1. **Create or Join Room** → Hosts create a room with a specific number of rounds or players join using a room code.  
+2. **Start Game** → Host starts the game, and a random emoji puzzle is presented.  
+3. **Real-Time Gameplay** → Players submit answers, with faster responses earning more points.  
+4. **Chat Functionality** → Players can communicate in real-time during the game.  
+5. **Leaderboard** → Scores are updated in real-time, and the top players are ranked.
 
 ---
 
-## 🔄 Future Improvements
-- 🎨 **Frontend React UI** for better user experience
-- 🎮 **Multiplayer Mode** (Real-time rooms & competition)
-- 🎭 **Emoji Customization** for player avatars
-- 📊 **Admin Dashboard** for managing users & scores
+## 📌 API Overview
+
+### 🎯 **Single Player APIs**
+- `POST /singleplayer/get_genres` → Fetch available genres.  
+- `GET /singleplayer/get_levels/<user_id>/<genre>` → Get levels for a user in a genre.  
+- `POST /singleplayer/submit_answer` → Submit an answer for a level.  
+- `GET /singleplayer/get_score/<user_id>/<genre>` → Fetch scores for a user in a specific genre.
+
+---
+
+### ⚔️ **Multiplayer APIs**
+- `POST /multiplayer/create_room` → Create a new multiplayer room.  
+- `POST /multiplayer/join_room` → Join an existing room using a room code.  
+- `POST /multiplayer/start_game` → Start the game and fetch the first question.  
+- `POST /multiplayer/submit_answer` → Submit an answer for a question.  
+- `GET /multiplayer/get_scores/<room_id>` → Get player scores for a room.  
+- `GET /multiplayer/get_players/<room_id>` → Get players in a room.
+
+---
+
+### 🏆 **Leaderboard APIs**
+- `GET /leaderboard/singleplayer` → Fetch top players for single player mode.  
+- `GET /leaderboard/multiplayer` → Fetch top players for multiplayer mode.
+
+---
+
+## ✅ Key Highlights of the Project
+- 🔄 **Real-Time Gameplay** with dynamic score updates.  
+- 🧩 **Randomized Emoji Puzzles** for fresh gameplay every round.  
+- ⚔️ **Multiplayer & Single Player Modes** with integrated scoring.  
+- 🏆 **Leaderboard Tracking** for both modes.  
+- ⚡ **Real-Time Chat** to enhance multiplayer engagement.  
+- 🧹 **Automatic Room Cleanup** to optimize storage.
+
+---
+
+## 🔄 Future Enhancements (Optional)
+- 🎨 **Custom Player Avatars & Profiles**.  
+- 🏆 **Seasonal Leaderboards** with resets.  
+- 📈 **Analytics Dashboard** for tracking player stats.  
+- 🌐 **Global Chat System** for inter-room conversations.
+
+---
 
 ## 📜 License
-This project is **open-source** under the MIT License.
+This project is licensed under the **MIT License**.  
+Feel free to contribute and enhance the gameplay! 🚀
+
+---
 
 ## 💬 Need Help?
-For questions, feel free to **open an issue** or reach out on [GitHub](https://github.com/yourusername/emoji-odyssey). 🚀
+For questions, feel free to **open an issue** or reach out on [GitHub](https://github.com/Tharanitharan-M/Emoji-Odyssey-Web). 🚀
