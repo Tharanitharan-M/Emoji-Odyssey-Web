@@ -234,3 +234,132 @@ def get_players(room_id):
         return jsonify({"error": str(e)}), 500
 
 
+@multiplayer_blueprint.route("/start_game", methods=["POST"])
+def start_game():
+    try:
+        data = request.json
+        room_id = data.get("room_id")
+
+        # Fetch a random question from the database
+        question_response = supabase_client.table("game_questions").select("*").order("random()").limit(1).execute()
+
+        if not question_response.data:
+            return jsonify({"error": "No questions available."}), 404
+
+        question = question_response.data[0]
+
+        # Set game state
+        supabase_client.table("game_state").insert({
+            "room_id": room_id,
+            "question_id": question["id"],
+            "current_round": 1,
+            "is_active": True,
+            "answered_users": [],
+        }).execute()
+
+        return jsonify({
+            "question": question["question"],
+            "room_id": room_id
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@multiplayer_blueprint.route("/submit_answer", methods=["POST"])
+def submit_answer():
+    try:
+        data = request.json
+        room_id = data.get("room_id")
+        user_id = data.get("user_id")
+        answer = data.get("answer")
+
+        # Fetch the current question
+        game_state_response = supabase_client.table("game_state").select("*").eq("room_id", room_id).execute()
+
+        if not game_state_response.data:
+            return jsonify({"error": "Game state not found."}), 404
+
+        game_state = game_state_response.data[0]
+        answered_users = game_state.get("answered_users", [])
+
+        # Check if the answer is correct
+        question_response = supabase_client.table("emoji_puzzles").select("correct_answer").eq("id", game_state["question_id"]).execute()
+        correct_answer = question_response.data[0]['correct_answer']
+
+        if answer.lower().strip() == correct_answer.lower().strip():
+            if user_id in answered_users:
+                return jsonify({"message": "Already answered correctly."})
+
+            # Calculate points based on order
+            points = max(10 - len(answered_users) * 2, 2)
+
+            # Update player's score
+            supabase_client.table("players_in_room").update({
+                "score": supabase_client.rpc('increment_score', {"amount": points})
+            }).eq("user_id", user_id).execute()
+
+            # Update the answered users
+            answered_users.append(user_id)
+            supabase_client.table("game_state").update({
+                "answered_users": answered_users
+            }).eq("room_id", room_id).execute()
+
+            return jsonify({"correct": True, "points": points})
+
+        return jsonify({"correct": False})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@multiplayer_blueprint.route("/get_scores/<room_id>", methods=["GET"])
+def get_scores(room_id):
+    try:
+        response = supabase_client.table("players_in_room").select("username, score").eq("room_id", room_id).order("score", desc=True).execute()
+        return jsonify({"players": response.data})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@multiplayer_blueprint.route("/end_game/<room_id>", methods=["POST"])
+def end_game(room_id):
+    try:
+        # Delete game state and player data
+        supabase_client.table("game_state").delete().eq("room_id", room_id).execute()
+        supabase_client.table("players_in_room").delete().eq("room_id", room_id).execute()
+
+        return jsonify({"message": "Game ended and data cleaned."})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+import random
+
+@multiplayer_blueprint.route("/get_random_question", methods=["POST"])
+def get_random_question():
+    try:
+        # ✅ Step 1: Get the total number of questions
+        count_response = supabase_client.table("emoji_puzzles").select("id", count="exact").execute()
+        total_count = count_response.count
+
+        if total_count == 0:
+            return jsonify({"error": "No questions available."}), 404
+
+        # ✅ Step 2: Generate a random offset and fetch one question
+        random_offset = random.randint(0, total_count - 1)
+
+        # ✅ Fetch one question using range
+        question_response = supabase_client.table("emoji_puzzles").select("*").range(random_offset, random_offset).execute()
+
+        if not question_response.data:
+            return jsonify({"error": "Failed to fetch question."}), 404
+
+        question = question_response.data[0]
+
+        return jsonify({
+            "emoji_clue": question["emoji_clue"],
+            "correct_answer": question["correct_answer"]
+        })
+
+    except Exception as e:
+        print("Error in get_random_question:", str(e))
+        return jsonify({"error": str(e)}), 500

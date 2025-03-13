@@ -13,13 +13,16 @@ export default function CreateRoomPage() {
   const [rounds, setRounds] = useState(1);
   const [roomCreated, setRoomCreated] = useState(false);
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
   const handleCreateRoom = async () => {
+    setIsLoading(true);
     try {
       const hostId = getUserIdFromToken();
       if (!hostId || !username.trim()) {
         setError("Please enter a valid name.");
+        setIsLoading(false);
         return;
       }
 
@@ -29,12 +32,14 @@ export default function CreateRoomPage() {
         total_rounds: rounds,
       });
 
-      setRoomCode(response.data.room_code);
-      setRoomId(response.data.room_id);
+      setRoomCode(response.data.room_code || "");
+      setRoomId(response.data.room_id || "");
       setRoomCreated(true);
     } catch (error: any) {
       console.error("Error creating room", error.response?.data || error.message);
       setError(error.response?.data.error || "An unexpected error occurred.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -57,7 +62,11 @@ export default function CreateRoomPage() {
   }, [roomId]);
 
   const startGame = () => {
-    router.push(`/multiplayer/room/${roomId}`);
+    if (!roomId) {
+      setError("Room ID is missing, cannot start the game.");
+      return;
+    }
+    router.push(`/multiplayer/room/${roomId}/game`);
   };
 
   return (
@@ -91,9 +100,10 @@ export default function CreateRoomPage() {
 
           <button
             onClick={handleCreateRoom}
-            className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
+            disabled={isLoading}
+            className={`px-4 py-2 rounded ${isLoading ? "bg-gray-400 cursor-not-allowed" : "bg-green-500 text-white hover:bg-green-600"}`}
           >
-            Create Room
+            {isLoading ? "Creating Room..." : "Create Room"}
           </button>
 
           {error && <p className="text-red-500 mt-4">{error}</p>}
