@@ -38,7 +38,7 @@ export default function CreateRoomPage() {
     }
   };
 
-  // Optimized Player Fetching
+  // Fetch players every 5 seconds
   useEffect(() => {
     let interval: NodeJS.Timeout;
 
@@ -50,7 +50,7 @@ export default function CreateRoomPage() {
         } catch (error) {
           console.error("Error fetching players", error);
         }
-      }, 5000); // Poll every 5 seconds for real-time updates
+      }, 5000);
     }
 
     return () => clearInterval(interval);
@@ -120,9 +120,14 @@ export default function CreateRoomPage() {
 
           <button
             onClick={startGame}
-            className="mt-6 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            disabled={players.length < 2}
+            className={`mt-6 px-4 py-2 rounded ${
+              players.length < 2
+                ? "bg-gray-400 text-white cursor-not-allowed"
+                : "bg-blue-500 text-white hover:bg-blue-600"
+            }`}
           >
-            Start Game
+            {players.length < 2 ? "Waiting for Players..." : "Start Game"}
           </button>
         </>
       )}
