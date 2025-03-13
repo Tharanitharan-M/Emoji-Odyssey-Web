@@ -53,7 +53,7 @@ export default function JoinRoomPage() {
         } catch (error) {
           console.error("Error fetching players", error);
         }
-      }, 10000); // Poll every 10 seconds
+      }, 5000); // Poll every 5 seconds
     }
 
     return () => clearInterval(interval);
@@ -64,8 +64,9 @@ export default function JoinRoomPage() {
   return (
     <div className="h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
       <div>
-      <BackButton to="/multiplayer" />
-    </div>
+        <BackButton to="/multiplayer" />
+      </div>
+
       <h1 className="text-3xl font-bold mb-6">
         {hasJoined ? "Room Details" : "Join Multiplayer Room"}
       </h1>
@@ -86,15 +87,22 @@ export default function JoinRoomPage() {
             onChange={(e) => setRoomCode(e.target.value)}
             className="border px-4 py-2 rounded mb-4"
           />
-          <button onClick={handleJoinRoom} className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">
+          <button
+            onClick={handleJoinRoom}
+            className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
+          >
             Join Room
           </button>
+
+          {error && <p className="text-red-500 mt-4">{error}</p>}
         </>
       )}
 
       {hasJoined && (
         <>
-          <p className="mt-4">Room Code: <strong>{roomCode}</strong></p>
+          <p className="mt-4">
+            Room Code: <strong>{roomCode}</strong>
+          </p>
           <h2 className="text-xl font-semibold mt-6 mb-2">Players in Room:</h2>
           <ul className="bg-white shadow p-4 rounded w-60">
             {players.map((player, index) => (

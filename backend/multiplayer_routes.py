@@ -59,7 +59,7 @@ def join_room():
         room_code = data.get("room_code")
         user_id = data.get("user_id")
         player_name = data.get("player_name")
-
+        
         if not room_code or not user_id or not player_name:
             return jsonify({"error": "room_code, user_id, and player_name are required"}), 400
 

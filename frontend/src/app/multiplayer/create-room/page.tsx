@@ -50,7 +50,7 @@ export default function CreateRoomPage() {
         } catch (error) {
           console.error("Error fetching players", error);
         }
-      }, 10000); // Poll every 10 seconds
+      }, 5000); // Poll every 5 seconds for real-time updates
     }
 
     return () => clearInterval(interval);
@@ -61,11 +61,11 @@ export default function CreateRoomPage() {
   };
 
   return (
-    
     <div className="h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
       <div>
-      <BackButton to="/multiplayer" />
-    </div>
+        <BackButton to="/multiplayer" />
+      </div>
+
       {!roomCreated && (
         <>
           <h1 className="text-3xl font-bold mb-6">Create Multiplayer Room</h1>
