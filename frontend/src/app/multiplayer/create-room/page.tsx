@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import api, { getUserIdFromToken } from "@/services/api";
+import BackButton from "@/components/BackButton";
 
 export default function CreateRoomPage() {
   const [roomCode, setRoomCode] = useState("");
@@ -49,7 +50,7 @@ export default function CreateRoomPage() {
         } catch (error) {
           console.error("Error fetching players", error);
         }
-      }, 3000); // Poll every 3 seconds
+      }, 10000); // Poll every 10 seconds
     }
 
     return () => clearInterval(interval);
@@ -60,7 +61,12 @@ export default function CreateRoomPage() {
   };
 
   return (
+    
     <div className="h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
+      <div>
+      <BackButton to="/game-mode" />
+      {/* Your Create Room Content */}
+    </div>
       {!roomCreated && (
         <>
           <h1 className="text-3xl font-bold mb-6">Create Multiplayer Room</h1>

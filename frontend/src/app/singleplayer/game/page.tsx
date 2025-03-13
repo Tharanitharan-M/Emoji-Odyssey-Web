@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import api, { getUserIdFromToken } from "@/services/api";
+import BackButton from "@/components/BackButton";
 
 export default function GamePage() {
   const router = useRouter();
@@ -132,7 +133,11 @@ export default function GamePage() {
 
   return (
     <div className="h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
-      
+      <div>
+      <BackButton to="/singleplayer/levels" />
+      {/* Your Single Player Game Content */}
+    </div>
+    
       {/* Score at Top Right */}
       <div className="absolute top-4 right-4 text-lg font-semibold">
         Score: <span className="text-blue-500">{score}</span>

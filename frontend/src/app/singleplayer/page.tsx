@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import api, { getUserIdFromToken } from "@/services/api";
+import BackButton from "@/components/BackButton";
 
 export default function GenreSelectionPage() {
   const [genres, setGenres] = useState<string[]>([]);
@@ -51,7 +52,10 @@ export default function GenreSelectionPage() {
 
   return (
     <div className="h-screen flex flex-col items-center justify-center bg-gray-100 relative">
-      
+      <div>
+      <BackButton to="/game-mode" />
+      {/* Your Levels Content */}
+    </div>
       {/* Logout Button */}
       <div className="absolute top-4 right-4">
         <button

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import BackButton from "@/components/BackButton";
 
 export default function GameModeSelection() {
   const router = useRouter();

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import api, { getUserIdFromToken } from "@/services/api";
+import BackButton from "@/components/BackButton";
 
 export default function JoinRoomPage() {
   const [name, setName] = useState("");
@@ -52,7 +53,7 @@ export default function JoinRoomPage() {
         } catch (error) {
           console.error("Error fetching players", error);
         }
-      }, 3000);
+      }, 10000); // Poll every 10 seconds
     }
 
     return () => clearInterval(interval);
@@ -62,6 +63,10 @@ export default function JoinRoomPage() {
 
   return (
     <div className="h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
+      <div>
+      <BackButton to="/game-mode" />
+      {/* Your Join Room Content */}
+    </div>
       <h1 className="text-3xl font-bold mb-6">
         {hasJoined ? "Room Details" : "Join Multiplayer Room"}
       </h1>

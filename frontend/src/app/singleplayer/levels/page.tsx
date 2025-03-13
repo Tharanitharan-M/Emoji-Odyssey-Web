@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import api, { getUserIdFromToken } from "@/services/api";
+import BackButton from "@/components/BackButton";
 
 export default function LevelsPage() {
   const router = useRouter();

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import api from "@/services/api";
+import BackButton from "@/components/BackButton";
 
 export default function StartGamePage() {
   const { room_id } = useParams();
@@ -28,6 +29,10 @@ export default function StartGamePage() {
 
   return (
     <div className="h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
+      <div>
+      <BackButton to="/multiplayer" />
+      {/* Your Multiplayer Room Content */}
+    </div>
       <h1 className="text-3xl font-bold mb-6">Submit Emoji Puzzle</h1>
 
       <input
